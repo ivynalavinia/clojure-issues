@@ -12,13 +12,14 @@
          (recur (rest coll) seen)
          (cons first-elem (myDistinct (rest coll) (conj seen first-elem))))))))
 
-(defn groupBy [coll attr]
-  (let [fn-or-key (if (fn? attr) attr (partial get attr))]
-    (reduce (fn [acc item]
-              (let [key (fn-or-key item)]
-                (assoc acc key (conj (get acc key []) item))))
-            {}
-            coll)))
+(defn groupBy [coll f]
+  (reduce (fn [ret x]
+            (let [k (if (fn? f) (f x) (get x f))]
+              (if (nil? k)
+                ret
+                (assoc ret k (conj (get ret k []) x)))))
+          {}
+          coll))
 
 (defn ^:private merge-two [left right attr]
   (cond
@@ -41,10 +42,10 @@
 (defn orderBy [coll attr]
   (merge-sort (vec coll) attr))
 
-(defn fold [reducer init coll]
+(defn fold [f initial-value coll]
   (if (empty? coll)
-    init
-    (recur reducer (reducer init (first coll)) (rest coll))))
+    initial-value
+    (recur f (f initial-value (first coll)) (rest coll))))
 
 (defn compose [f1 f2]
   (fn [x] (f1 (f2 x))))
