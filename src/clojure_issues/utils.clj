@@ -34,8 +34,8 @@
 (defn ^:private merge-sort [coll attr]
   (if (<= (count coll) 1)
     coll
-    (let [mid (quot (count coll) 2)
-          left (subvec coll 0 mid)
+    (let [mid   (quot (count coll) 2)
+          left  (subvec coll 0 mid)
           right (subvec coll mid)]
       (merge-two (merge-sort left attr) (merge-sort right attr) attr))))
 

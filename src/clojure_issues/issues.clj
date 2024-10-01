@@ -1,63 +1,68 @@
 (ns clojure-issues.issues
   (:require [clj-http.client :as client]
             [cheshire.core :as json]
-            [clojure-issues.utils :as utils]))
+            [clojure-issues.utils :as utils]
+            [clojure.instant :refer [read-instant-date]])
+  (:import [java.time Instant]))
 
-(defn fetch-raw [issues-url]
+(defn fetch-all-pages-raw [issues-url]
   (let [response (client/get issues-url)
         issues   (json/parse-string (:body response) true)
         next-url (-> response :links :next :href)]
     (if next-url
-      (concat issues (fetch-raw next-url))
+      (concat issues (fetch-all-pages-raw next-url))
       issues)))
 
 (defn list-titles [issues]
   (map :title issues))
 
-(defn single-filter-by-labels [issue labels]
-  (let [issue-labels (set (map :name (:labels issue)))]
-    (some #(contains? issue-labels %) labels)))
+(defn filter-by-state [issues state]
+  (filter #(= state (:state %)) issues))
 
-(defn filter-by-labels [issues labels]
-  (filter #(single-filter-by-labels % labels) issues))
+(defn ^:private single-filter-by-label [issue label]
+  (let [issue-labels (set (map :name (:labels issue)))]
+    (contains? issue-labels label)))
+
+(defn filter-by-label [issues label]
+  (filter #(single-filter-by-label % label) issues))
 
 (defn filter-by-author [issues author]
   (let [author-login (utils/compose :login :user)]
     (filter #(= (author-login %) author) issues)))
 
 (defn group-by-labels [issues]
-  (let [all-labels (map :name (mapcat :labels issues))]
-    (let [distinct-labels (utils/myDistinct all-labels :name)]
-      (utils/fold (fn [acc label]
-              (assoc acc label
-                         (filter (fn [issue]
-                                   (some #(= label (:name %)) (:labels issue)))
-                                 issues)))
-            {}
-            distinct-labels))))
-
+  (let [all-labels      (map :name (mapcat :labels issues))
+        distinct-labels (utils/myDistinct all-labels)]
+    (utils/fold (fn [acc label]
+                  (assoc acc label
+                             (filter (fn [issue]
+                                       (some #(= label (:name %)) (:labels issue)))
+                                     issues)))
+                {}
+                distinct-labels)))
 
 (defn group-by-author [issues]
   (let [extract-author (fn [issue] (get-in issue [:user :login]))]
     (utils/groupBy issues extract-author)))
 
-(defn order-by-criteria [issues criteria]
-  (utils/orderBy issues criteria))
+(defn order-by-comments [issues]
+  (utils/orderBy issues :comments))
 
-(defn count-issues [issues]
-  (utils/fold (fn [acc issue]
-          (update acc (:state issue) (fnil inc 0)))
-        {}
-        issues))
+(defn ^:private parse-timestamps [coll attr]
+  (map #(update % attr (fn [param] (-> param read-instant-date .getTime))) coll))
+
+(defn ^:private revert-timestamps [coll attr]
+  (map #(update % attr (fn [ms] (.toString (Instant/ofEpochMilli ms)))) coll))
+
+(defn order-by-created_at [issues]
+  (let [parsed-issues (parse-timestamps issues :created_at)
+        ordered       (utils/orderBy parsed-issues :created_at)]
+    (revert-timestamps ordered :created_at)))
+
+(defn count-issues-by-state [issues state]
+  (count (filter #(= state (:state %)) issues)))
 
 (defn count-comments-by-issue [issues]
   (into {} (map (fn [issue]
-                  [(:html_url issue) (:comments issue)])
+                  [(:title issue) (:comments issue)])
                 issues)))
-
-;Obter todas as issues
-;Filtrar issues abertas/fechadas, por label e por autor
-;Agrupamento de issues por label e por autor
-;Ordenar issues pela quantidade de comentários e por data de criação
-;Obter número de issues abertas ou fechadas
-;Obter número de comentários por issue
