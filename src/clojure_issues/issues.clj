@@ -64,5 +64,5 @@
 
 (defn count-comments-by-issue [issues]
   (into {} (map (fn [issue]
-                  [(:title issue) (:comments issue)])
+                  [(:title issue) (str (:comments issue) " comentários")])
                 issues)))

@@ -16,8 +16,9 @@
   (read-line))
 
 (defn choose-url []
-  (let [url (prompt "Digite a URL da API do GitHub (ou pressione Enter para usar a URL padrão):")]
-    (if (empty? url)
+  (let [owner-repo (prompt "Digite o owner e o nome do repositório no formato 'owner/repo' (ou pressione Enter para usar o repositório padrão):")
+        url        (str "https://api.github.com/repos/" owner-repo "/issues?state=all")]
+    (if (empty? owner-repo)
       (:default-github-api-url config)
       url)))
 
@@ -35,12 +36,16 @@
   (println "0. Sair")
   (prompt "Selecione uma opção:"))
 
-;Obter todas as issues
-;Filtrar issues abertas/fechadas, por label e por autor
-;Agrupamento de issues por label e por autor
-;Ordenar issues pela quantidade de comentários e por data de criação
-;Obter número de issues abertas ou fechadas
-;Obter número de comentários por issue
+(defn ^:private only-titles [issues]
+  (doseq [title (issues/list-titles issues)]
+    (println title)))
+
+(defn ^:private only-titles-maps [issues]
+  (-> (into {}
+            (map (fn [[user issues-list]]
+                   [user (map #(select-keys % [:title]) issues-list)])
+                 issues))
+      println))
 
 (defn run []
   (let [issues-url (choose-url)
@@ -49,44 +54,53 @@
       (let [choice (menu)]
         (cond
           (= choice "1") (do
-                           (println (issues/list-titles issues))
+                           (only-titles issues)
+                           (println)
                            (recur))
 
           (= choice "2") (do
                            (let [state (prompt "Digite 'open' para issues abertas ou 'closed' para fechadas:")]
-                             (println (issues/filter-by-state issues state)))
+                             (only-titles (issues/filter-by-state issues state)))
+                           (println)
                            (recur))
 
           (= choice "3") (do
                            (let [label (prompt "Digite o nome do label:")]
-                             (println (issues/filter-by-label issues label)))
+                             (only-titles (issues/filter-by-label issues label)))
+                           (println)
                            (recur))
 
           (= choice "4") (do
-                           (let [author (prompt "Digite o nome do autor:")]
-                             (println (issues/filter-by-author issues author)))
+                           (let [author (prompt "Digite o user do autor:")]
+                             (only-titles (issues/filter-by-author issues author)))
+                           (println)
                            (recur))
 
           (= choice "5") (do
-                           (println (issues/group-by-labels issues))
+                           (only-titles-maps (issues/group-by-labels issues))
+                           (println)
                            (recur))
 
           (= choice "6") (do
-                           (println (issues/group-by-author issues))
+                           (only-titles-maps (issues/group-by-author issues))
+                           (println)
                            (recur))
 
           (= choice "7") (do
-                           (println (issues/order-by-comments issues))
+                           (only-titles (issues/order-by-comments issues))
+                           (println)
                            (recur))
 
           (= choice "8") (do
-                           (println (issues/order-by-created_at issues))
+                           (only-titles (issues/order-by-created_at issues))
+                           (println)
                            (recur))
 
           (= choice "9") (do
-                           (println {:open-issues        (issues/count-issues-by-state issues "open")
-                                     :closed-issues      (issues/count-issues-by-state issues "closed")
-                                     :comments-per-issue (issues/count-comments-by-issue issues)})
+                           (println {:issues-abertas        (issues/count-issues-by-state issues "open")
+                                     :issues-fechadas       (issues/count-issues-by-state issues "closed")
+                                     :comentarios-por-issue (issues/count-comments-by-issue issues)})
+                           (println)
                            (recur))
 
           (= choice "0") (println "Saindo...")
